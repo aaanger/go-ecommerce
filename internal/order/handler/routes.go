@@ -22,7 +22,7 @@ func OrderRoutes(r *gin.Engine, db *sql.DB) {
 	order.GET("/all", h.GetAllOrders)
 	order.PUT("/cancel/:id", h.CancelOrder)
 
-	updateStatus := order.Group("/update-status", middleware.ModeratorIdentity)
+	updateStatus := order.Group("/update-status")
 	{
 		updateStatus.PUT("/:id", h.UpdateOrderStatus)
 	}
