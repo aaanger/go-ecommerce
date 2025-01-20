@@ -132,55 +132,29 @@ func (_m *IOrderService) GetOrderByID(userID int, orderID int) (*model.Order, er
 	return r0, r1
 }
 
-// OrderStatusDelivered provides a mock function with given fields: userID, orderID
-func (_m *IOrderService) OrderStatusDelivered(userID int, orderID int) (string, error) {
-	ret := _m.Called(userID, orderID)
+// UpdateOrderStatus provides a mock function with given fields: userID, orderID, status
+func (_m *IOrderService) UpdateOrderStatus(userID int, orderID int, status string) (*model.Order, error) {
+	ret := _m.Called(userID, orderID, status)
 
 	if len(ret) == 0 {
-		panic("no return value specified for OrderStatusDelivered")
+		panic("no return value specified for UpdateOrderStatus")
 	}
 
-	var r0 string
+	var r0 *model.Order
 	var r1 error
-	if rf, ok := ret.Get(0).(func(int, int) (string, error)); ok {
-		return rf(userID, orderID)
+	if rf, ok := ret.Get(0).(func(int, int, string) (*model.Order, error)); ok {
+		return rf(userID, orderID, status)
 	}
-	if rf, ok := ret.Get(0).(func(int, int) string); ok {
-		r0 = rf(userID, orderID)
+	if rf, ok := ret.Get(0).(func(int, int, string) *model.Order); ok {
+		r0 = rf(userID, orderID, status)
 	} else {
-		r0 = ret.Get(0).(string)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*model.Order)
+		}
 	}
 
-	if rf, ok := ret.Get(1).(func(int, int) error); ok {
-		r1 = rf(userID, orderID)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// OrderStatusDelivering provides a mock function with given fields: userID, orderID
-func (_m *IOrderService) OrderStatusDelivering(userID int, orderID int) (string, error) {
-	ret := _m.Called(userID, orderID)
-
-	if len(ret) == 0 {
-		panic("no return value specified for OrderStatusDelivering")
-	}
-
-	var r0 string
-	var r1 error
-	if rf, ok := ret.Get(0).(func(int, int) (string, error)); ok {
-		return rf(userID, orderID)
-	}
-	if rf, ok := ret.Get(0).(func(int, int) string); ok {
-		r0 = rf(userID, orderID)
-	} else {
-		r0 = ret.Get(0).(string)
-	}
-
-	if rf, ok := ret.Get(1).(func(int, int) error); ok {
-		r1 = rf(userID, orderID)
+	if rf, ok := ret.Get(1).(func(int, int, string) error); ok {
+		r1 = rf(userID, orderID, status)
 	} else {
 		r1 = ret.Error(1)
 	}

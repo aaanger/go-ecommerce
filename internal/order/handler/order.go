@@ -104,49 +104,39 @@ func (h *OrderHandler) GetAllOrders(c *gin.Context) {
 	response.JSON(c, http.StatusOK, res)
 }
 
-func (h *OrderHandler) OrderStatusDelivering(c *gin.Context) {
-	userID, err := middleware.GetUserID(c)
+func (h *OrderHandler) UpdateOrderStatus(c *gin.Context) {
+	var req model.UpdateOrderStatusReq
+
+	err := c.BindJSON(&req)
 	if err != nil {
-		response.Error(c, http.StatusUnauthorized, "user id not found")
+		response.Error(c, http.StatusBadRequest, "invalid input parameters")
+		return
+	}
+
+	role, ok := c.Get("role")
+	if !ok {
+		response.Error(c, http.StatusUnauthorized, "role not found")
+		return
+	}
+
+	if role != "moderator" {
+		response.Error(c, http.StatusForbidden, "moderator role required")
 		return
 	}
 
 	orderID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, err.Error())
+		response.Error(c, http.StatusBadRequest, "invalid order id")
 		return
 	}
 
-	status, err := h.service.OrderStatusDelivering(userID, orderID)
+	order, err := h.service.UpdateOrderStatus(req.UserID, orderID, req.Status)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "Failed to update order status")
 		return
 	}
 
-	response.JSON(c, http.StatusOK, status)
-}
-
-func (h *OrderHandler) OrderStatusDelivered(c *gin.Context) {
-	userID, err := middleware.GetUserID(c)
-	if err != nil {
-		response.Error(c, http.StatusUnauthorized, "user id not found")
-		return
-	}
-
-	orderID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		response.Error(c, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	status, err := h.service.OrderStatusDelivered(userID, orderID)
-	if err != nil {
-		logrus.Error(err)
-		response.Error(c, http.StatusInternalServerError, "Failed to update order status")
-		return
-	}
-
-	response.JSON(c, http.StatusOK, status)
+	c.JSON(http.StatusOK, order)
 }
 
 func (h *OrderHandler) CancelOrder(c *gin.Context) {

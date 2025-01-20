@@ -323,7 +323,164 @@ func (suite *OrderHandlerSuite) TestHandler_GetAllOrdersServiceFailure() {
 	suite.Equal(`"Orders not found"`, w.Body.String())
 }
 
-// =====================================================================================================================
+// ====================================================================================================================
+
+func (suite *OrderHandlerSuite) TestHandler_UpdateOrderStatusSuccess() {
+	req := &model.UpdateOrderStatusReq{
+		UserID: 1,
+		Status: model.StatusOrderDelivering,
+	}
+
+	suite.service.On("UpdateOrderStatus", 1, 1, model.StatusOrderDelivering).Return(&model.Order{
+		ID:     1,
+		UserID: 1,
+		Lines: []model.OrderLine{
+			{
+				ProductID: 1,
+				Quantity:  1,
+			},
+			{
+				ProductID: 2,
+				Quantity:  2,
+			},
+		},
+		Status:     model.StatusOrderDelivering,
+		TotalPrice: 123,
+	}, nil)
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("userID", 2)
+		c.Set("role", "moderator")
+		c.AddParam("id", strconv.Itoa(1))
+		c.Next()
+	})
+	router.PUT("/update-status/:id", suite.handler.UpdateOrderStatus)
+
+	requestBody, _ := json.Marshal(req)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("PUT", "/update-status/1", bytes.NewBuffer(requestBody))
+
+	router.ServeHTTP(w, r)
+
+	var res interface{}
+	var orderRes model.Order
+	_ = json.Unmarshal(w.Body.Bytes(), &res)
+	lib.Copy(&orderRes, &res)
+
+	suite.Equal(http.StatusOK, w.Code)
+	suite.Equal(model.StatusOrderDelivering, orderRes.Status)
+}
+
+func (suite *OrderHandlerSuite) TestHandler_UpdateOrderStatusForbidden() {
+	req := &model.UpdateOrderStatusReq{
+		UserID: 1,
+		Status: model.StatusOrderDelivering,
+	}
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("userID", 1)
+		c.Set("role", "user")
+		c.AddParam("id", strconv.Itoa(1))
+		c.Next()
+	})
+	router.PUT("/update-status/:id", suite.handler.UpdateOrderStatus)
+
+	requestBody, _ := json.Marshal(req)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("PUT", "/update-status/1", bytes.NewBuffer(requestBody))
+
+	router.ServeHTTP(w, r)
+
+	suite.Equal(http.StatusForbidden, w.Code)
+	suite.Equal(`"moderator role required"`, w.Body.String())
+}
+
+func (suite *OrderHandlerSuite) TestHandler_UpdateOrderStatusEmptyFields() {
+	req := &model.UpdateOrderStatusReq{
+		UserID: 1,
+	}
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("userID", 2)
+		c.Set("role", "moderator")
+		c.AddParam("id", strconv.Itoa(1))
+		c.Next()
+	})
+	router.PUT("/update-status/:id", suite.handler.UpdateOrderStatus)
+
+	requestBody, _ := json.Marshal(req)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("PUT", "/update-status/1", bytes.NewBuffer(requestBody))
+
+	router.ServeHTTP(w, r)
+
+	suite.Equal(http.StatusBadRequest, w.Code)
+	suite.Equal(`"invalid input parameters"`, w.Body.String())
+}
+
+func (suite *OrderHandlerSuite) TestHandler_UpdateOrderStatusInvalidStatus() {
+	req := &model.UpdateOrderStatusReq{
+		UserID: 1,
+		Status: "invalid",
+	}
+
+	suite.service.On("UpdateOrderStatus", req.UserID, 1, req.Status).Return(nil, errors.New("invalid order status"))
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("userID", 2)
+		c.Set("role", "moderator")
+		c.AddParam("id", strconv.Itoa(1))
+		c.Next()
+	})
+	router.PUT("/update-status/:id", suite.handler.UpdateOrderStatus)
+
+	requestBody, _ := json.Marshal(req)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("PUT", "/update-status/1", bytes.NewBuffer(requestBody))
+
+	router.ServeHTTP(w, r)
+
+	suite.Equal(http.StatusInternalServerError, w.Code)
+	suite.Equal(`"Failed to update order status"`, w.Body.String())
+}
+
+func (suite *OrderHandlerSuite) TestHandler_UpdateOrderStatusServiceFailure() {
+	req := &model.UpdateOrderStatusReq{
+		UserID: 1,
+		Status: model.StatusOrderDelivering,
+	}
+
+	suite.service.On("UpdateOrderStatus", req.UserID, 1, req.Status).Return(nil, errors.New("error"))
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("userID", 2)
+		c.Set("role", "moderator")
+		c.AddParam("id", strconv.Itoa(1))
+		c.Next()
+	})
+	router.PUT("/update-status/:id", suite.handler.UpdateOrderStatus)
+
+	requestBody, _ := json.Marshal(req)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("PUT", "/update-status/1", bytes.NewBuffer(requestBody))
+
+	router.ServeHTTP(w, r)
+
+	suite.Equal(http.StatusInternalServerError, w.Code)
+	suite.Equal(`"Failed to update order status"`, w.Body.String())
+}
+
+// ====================================================================================================================
 
 func (suite *OrderHandlerSuite) TestHandler_CancelOrderSuccess() {
 	suite.service.On("CancelOrder", 1, 1).Return(&model.Order{

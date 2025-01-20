@@ -39,6 +39,11 @@ type CreateOrderReq struct {
 	Lines []OrderLineReq `json:"lines" binding:"required,dive,required"`
 }
 
+type UpdateOrderStatusReq struct {
+	UserID int    `json:"user_id" binding:"required"`
+	Status string `json:"status" binding:"required"`
+}
+
 type GetAllOrdersRes struct {
 	ID         int       `json:"id"`
 	CreatedAt  time.Time `json:"created_at"`

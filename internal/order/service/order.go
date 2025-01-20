@@ -4,8 +4,8 @@ import (
 	"errors"
 	"github.com/aaanger/ecommerce/internal/order/model"
 	"github.com/aaanger/ecommerce/internal/order/repository"
-	model2 "github.com/aaanger/ecommerce/internal/product/model"
-	prepository "github.com/aaanger/ecommerce/internal/product/repository"
+	productModel "github.com/aaanger/ecommerce/internal/product/model"
+	productRepository "github.com/aaanger/ecommerce/internal/product/repository"
 	"github.com/sirupsen/logrus"
 	_ "github.com/vektra/mockery/mockery"
 )
@@ -16,17 +16,16 @@ type IOrderService interface {
 	CreateOrder(userID int, lines *model.CreateOrderReq) (*model.Order, error)
 	GetOrderByID(userID, orderID int) (*model.Order, error)
 	GetAllOrders(userID int) ([]model.Order, error)
-	OrderStatusDelivering(userID int, orderID int) (string, error)
-	OrderStatusDelivered(userID int, orderID int) (string, error)
+	UpdateOrderStatus(userID, orderID int, status string) (*model.Order, error)
 	CancelOrder(userID, orderID int) (*model.Order, error)
 }
 
 type OrderService struct {
 	repo        repository.IOrderRepository
-	productRepo prepository.IProductRepository
+	productRepo productRepository.IProductRepository
 }
 
-func NewOrderService(repo repository.IOrderRepository, productRepo prepository.IProductRepository) *OrderService {
+func NewOrderService(repo repository.IOrderRepository, productRepo productRepository.IProductRepository) *OrderService {
 	return &OrderService{
 		repo:        repo,
 		productRepo: productRepo,
@@ -45,7 +44,7 @@ func (s *OrderService) CreateOrder(userID int, req *model.CreateOrderReq) (*mode
 
 	logrus.Info(lines)
 
-	productMap := make(map[int]*model2.Product)
+	productMap := make(map[int]*productModel.Product)
 	for i := range lines {
 		product, err := s.productRepo.GetProductByID(lines[i].ProductID)
 		if err != nil {
@@ -88,40 +87,25 @@ func (s *OrderService) GetAllOrders(userID int) ([]model.Order, error) {
 	return s.repo.GetAllOrders(userID)
 }
 
-func (s *OrderService) OrderStatusDelivering(userID int, orderID int) (string, error) {
+func (s *OrderService) UpdateOrderStatus(userID, orderID int, status string) (*model.Order, error) {
 	order, err := s.repo.GetOrderByID(userID, orderID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	if order.Status == model.StatusOrderDelivering || order.Status == model.StatusOrderDelivered || order.Status == model.StatusOrderCanceled {
-		return "", errors.New("invalid order status")
+	if order.Status == model.StatusOrderDelivered || order.Status == model.StatusOrderCanceled {
+		return nil, errors.New("failed to update status: order delivered or canceled")
 	}
 
-	err = s.repo.UpdateOrder(userID, orderID, model.StatusOrderDelivering)
-	if err != nil {
-		return "", err
+	if status == model.StatusOrderDelivering || status == model.StatusOrderDelivered {
+		err = s.repo.UpdateOrder(userID, orderID, status)
+		if err != nil {
+			return nil, err
+		}
+		return order, nil
 	}
 
-	return model.StatusOrderDelivering, nil
-}
-
-func (s *OrderService) OrderStatusDelivered(userID int, orderID int) (string, error) {
-	order, err := s.repo.GetOrderByID(userID, orderID)
-	if err != nil {
-		return "", err
-	}
-
-	if order.Status == model.StatusOrderCreated || order.Status == model.StatusOrderDelivered || order.Status == model.StatusOrderCanceled {
-		return "", errors.New("invalid order status")
-	}
-
-	err = s.repo.UpdateOrder(userID, orderID, model.StatusOrderDelivered)
-	if err != nil {
-		return "", err
-	}
-
-	return model.StatusOrderDelivered, nil
+	return nil, errors.New("invalid status")
 }
 
 func (s *OrderService) CancelOrder(userID, orderID int) (*model.Order, error) {

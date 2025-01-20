@@ -123,7 +123,7 @@ func TestRepository_AuthUser(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			testCase.mock()
-			got, err := r.AuthUser(testCase.user.Email)
+			got, err := r.AuthUser(testCase.user.Email, testCase.user.Password)
 			if testCase.err {
 				assert.Error(t, err)
 			} else {

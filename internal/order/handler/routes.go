@@ -24,7 +24,6 @@ func OrderRoutes(r *gin.Engine, db *sql.DB) {
 
 	updateStatus := order.Group("/update-status", middleware.ModeratorIdentity)
 	{
-		updateStatus.POST("/delivering/:id", h.OrderStatusDelivering)
-		updateStatus.POST("/delivered/:id", h.OrderStatusDelivered)
+		updateStatus.PUT("/:id", h.UpdateOrderStatus)
 	}
 }
