@@ -6,7 +6,6 @@ toolchain go1.23.4
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/confluentinc/confluent-kafka-go v1.9.2
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/gin-gonic/gin v1.10.0
 	github.com/golang/mock v1.6.0
@@ -15,12 +14,11 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.10.0
+	github.com/vektra/mockery v1.1.2
 	golang.org/x/crypto v0.27.0
 )
 
 require (
-	github.com/bxcodec/faker/v3 v3.8.1 // indirect
-	github.com/bxcodec/faker/v4 v4.0.0-beta.3 // indirect
 	github.com/bytedance/sonic v1.11.6 // indirect
 	github.com/bytedance/sonic/loader v0.1.1 // indirect
 	github.com/cloudwego/base64x v0.1.4 // indirect
@@ -57,7 +55,6 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
-	github.com/vektra/mockery v1.1.2 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/arch v0.8.0 // indirect

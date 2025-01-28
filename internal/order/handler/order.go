@@ -3,7 +3,6 @@ package handler
 import (
 	"github.com/aaanger/ecommerce/internal/order/model"
 	"github.com/aaanger/ecommerce/internal/order/service"
-	"github.com/aaanger/ecommerce/pkg/broker"
 	"github.com/aaanger/ecommerce/pkg/middleware"
 	"github.com/aaanger/ecommerce/pkg/response"
 	"github.com/gin-gonic/gin"
@@ -12,15 +11,8 @@ import (
 	"strconv"
 )
 
-const (
-	createTopic = "order.create"
-	updateTopic = "order.update"
-	cancelTopic = "order.cancel"
-)
-
 type OrderHandler struct {
-	service  service.IOrderService
-	producer broker.Producer
+	service service.IOrderService
 }
 
 func NewOrderHandler(service service.IOrderService) *OrderHandler {
