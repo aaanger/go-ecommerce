@@ -5,7 +5,7 @@
 package mock_service
 
 import (
-	model "ecommerce/internal/user/model"
+	"github.com/aaanger/ecommerce/internal/user/model"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
