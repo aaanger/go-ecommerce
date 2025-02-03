@@ -8,5 +8,5 @@
 - Загрузка .env файла с [joho/godotenv](https://github.com/joho/godotenv)
 # Как запустить
 - ```docker compose up``` поднимает БД
-- ```migrate``` миграция БД
+- ```make migrate``` миграция БД
 - ```make run``` запускает приложение
