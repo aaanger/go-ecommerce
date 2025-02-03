@@ -3,7 +3,6 @@ package repository
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 	"github.com/aaanger/ecommerce/internal/user/model"
 	"golang.org/x/crypto/bcrypt"
 	"strings"
@@ -29,7 +28,7 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 func (r *UserRepository) CreateUser(email, password, role string) (*model.User, error) {
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, fmt.Errorf("repo user register: %w", err)
+		return nil, err
 	}
 
 	user := model.User{
@@ -40,7 +39,7 @@ func (r *UserRepository) CreateUser(email, password, role string) (*model.User, 
 	row := r.db.QueryRow(`INSERT INTO users (email, password_hash, role) VALUES($1, $2, $3) RETURNING id;`, user.Email, user.Password, user.Role)
 	err = row.Scan(&user.ID)
 	if err != nil {
-		return nil, fmt.Errorf("repo create user: %w", err)
+		return nil, err
 	}
 
 	return &user, nil
