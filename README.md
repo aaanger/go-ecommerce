@@ -7,6 +7,6 @@
 - Конфигурация приложения с помощью библиотеки [spf13/viper](https://github.com/spf13/viper)
 - Загрузка .env файла с [joho/godotenv](https://github.com/joho/godotenv)
 # Как запустить
-- ```docker compose up``` поднимает БД
+- ```make build``` сборка приложения
+- ```make run``` запуск приложения
 - ```make migrate``` миграция БД
-- ```make run``` запускает приложение
