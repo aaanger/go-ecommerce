@@ -1,5 +1,7 @@
-start:
-	go run cmd/main.go
+build:
+	docker compose build
+run:
+	docker compose up
 migrate:
 	goose -dir pkg/db/migrations postgres "host=${PSQL_HOST} port=${PSQL_PORT} user=${PSQL_USERNAME} password=${PSQL_PASSWORD} dbname=${PSQL_DBNAME} sslmode=disabled" up
 rollback:
