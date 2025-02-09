@@ -20,22 +20,20 @@ func TestCreateUser(t *testing.T) {
 	password := "password123"
 	role := "user"
 
-	// Ожидаем вызов SQL-запроса и возвращаем ID пользователя
+	
 	mock.ExpectQuery(`INSERT INTO users`).
-		WithArgs(strings.ToLower(email), sqlmock.AnyArg(), role). // `sqlmock.AnyArg()` заменяет хеш пароля
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1)) // Возвращаем ID = 1
+		WithArgs(strings.ToLower(email), sqlmock.AnyArg(), role).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 
-	// Вызываем метод
+	
 	user, err := repo.CreateUser(email, password, role)
 
-	// Проверяем, что ошибок нет
 	assert.NoError(t, err)
 	assert.NotNil(t, user)
 	assert.Equal(t, 1, user.ID)
 	assert.Equal(t, strings.ToLower(email), user.Email)
 	assert.Equal(t, role, user.Role)
 
-	// Проверяем, что все mock-ожидания выполнены
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -46,7 +44,7 @@ func TestCreateUser_HashError(t *testing.T) {
 
 	repo := NewUserRepository(db)
 
-	_, err = repo.CreateUser("test@example.com", "", "user") // Пустой пароль вызовет ошибку
+	_, err = repo.CreateUser("test@example.com", "", "user") 
 	assert.Error(t, err)
 }
 
@@ -62,13 +60,13 @@ func TestCreateUser_DBError(t *testing.T) {
 	role := "user"
 
 	mock.ExpectQuery(`INSERT INTO users`).
-		WithArgs(strings.ToLower(email), sqlmock.AnyArg(), role). // 💡 Используем sqlmock.AnyArg()
+		WithArgs(strings.ToLower(email), sqlmock.AnyArg(), role). 
 		WillReturnError(errors.New("db error"))
 
 	_, err = repo.CreateUser(email, password, role)
 	assert.Error(t, err)
 
-	assert.NoError(t, mock.ExpectationsWereMet()) // Проверяем, что все ожидания выполнены
+	assert.NoError(t, mock.ExpectationsWereMet()) 
 }
 
 func TestAuthUser_Success(t *testing.T) {
