@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"errors"
+	"fmt"
 	"github.com/aaanger/ecommerce/pkg/jwt"
 	"github.com/aaanger/ecommerce/pkg/response"
 	"github.com/gin-gonic/gin"
@@ -27,7 +28,7 @@ func UserIdentity(c *gin.Context) {
 		return
 	}
 
-	userID, role, err := jwt.ParseToken(headerParts[1])
+	userID, email, role, err := jwt.ParseToken(headerParts[1])
 	if err != nil {
 		logrus.WithError(err).Warn("invalid token")
 		response.Error(c, http.StatusUnauthorized, "invalid token")
@@ -37,6 +38,7 @@ func UserIdentity(c *gin.Context) {
 
 	logrus.Infof("Authenticated user id = %d, role = %s", userID, role)
 	c.Set("userID", userID)
+	c.Set("email", email)
 	c.Set("role", role)
 }
 
@@ -52,6 +54,20 @@ func GetUserID(c *gin.Context) (int, error) {
 	}
 
 	return userID, nil
+}
+
+func GetUserEmail(c *gin.Context) (string, error) {
+	email, ok := c.Get("email")
+	if !ok {
+		return "", fmt.Errorf("get user email: email not found")
+	}
+
+	emailString, ok := email.(string)
+	if !ok {
+		return "", fmt.Errorf("get user email: invalid type of email")
+	}
+
+	return emailString, nil
 }
 
 func ModeratorIdentity(c *gin.Context) {

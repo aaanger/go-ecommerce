@@ -15,6 +15,7 @@ const (
 type Order struct {
 	ID         int         `json:"id"`
 	UserID     int         `json:"user_id"`
+	UserEmail  string      `json:"user_email"`
 	CreatedAt  time.Time   `json:"created_at"`
 	UpdatedAt  time.Time   `json:"updated_at"`
 	Lines      []OrderLine `json:"lines"`

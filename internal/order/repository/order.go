@@ -1,22 +1,37 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"github.com/aaanger/ecommerce/internal/order/model"
+	"go.uber.org/zap"
 	"time"
 )
 
 //go:generate mockery --name=IOrderRepository
 
 type IOrderRepository interface {
-	CreateOrder(userID int, lines []model.OrderLine) (*model.Order, error)
 	GetOrderByID(userID, orderID int) (*model.Order, error)
 	GetAllOrders(userID int) ([]model.Order, error)
 	UpdateOrder(userID, orderID int, status string) error
+
+	BeginTx(ctx context.Context) (*OrderTxRepository, error)
+}
+
+type IOrderTxRepository interface {
+	CreateOrder(userID int, userEmail string, lines []model.OrderLine) (*model.Order, error)
+	Commit() error
+	Rollback() error
 }
 
 type OrderRepository struct {
-	db *sql.DB
+	db  *sql.DB
+	log *zap.Logger
+}
+
+type OrderTxRepository struct {
+	tx  *sql.Tx
+	log *zap.Logger
 }
 
 func NewOrderRepository(db *sql.DB) *OrderRepository {
@@ -25,7 +40,22 @@ func NewOrderRepository(db *sql.DB) *OrderRepository {
 	}
 }
 
-func (r *OrderRepository) CreateOrder(userID int, lines []model.OrderLine) (*model.Order, error) {
+func (r *OrderRepository) BeginTx(ctx context.Context) (*OrderTxRepository, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return &OrderTxRepository{tx: tx}, nil
+}
+
+func (r *OrderTxRepository) CreateOrder(userID int, userEmail string, lines []model.OrderLine) (*model.Order, error) {
+	log := r.log.With(
+		zap.String("service", "order"),
+		zap.String("layer", "repository"),
+		zap.String("method", "CreateOrder"),
+		zap.Int("userID", userID))
+
 	var totalPrice float64
 
 	for _, line := range lines {
@@ -34,6 +64,7 @@ func (r *OrderRepository) CreateOrder(userID int, lines []model.OrderLine) (*mod
 
 	order := model.Order{
 		UserID:     userID,
+		UserEmail:  userEmail,
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 		Lines:      lines,
@@ -41,30 +72,36 @@ func (r *OrderRepository) CreateOrder(userID int, lines []model.OrderLine) (*mod
 		TotalPrice: totalPrice,
 	}
 
-	tx, err := r.db.Begin()
+	log.Debug("Executing INSERT query on orders")
+	row := r.tx.QueryRow(`INSERT INTO orders (user_id, user_email, created_at, updated_at, status, total_price) VALUES($1, $2, $3, $4, $5, $6) RETURNING id;`,
+		order.UserID, order.UserEmail, order.CreatedAt, order.UpdatedAt, order.Status, order.TotalPrice)
+
+	err := row.Scan(&order.ID)
 	if err != nil {
+		log.Error("Failed to create order", zap.Error(err))
 		return nil, err
 	}
 
-	row := tx.QueryRow(`INSERT INTO orders (user_id, created_at, updated_at, status, total_price) VALUES($1, $2, $3, $4, $5) RETURNING id;`,
-		order.UserID, order.CreatedAt, order.UpdatedAt, order.Status, order.TotalPrice)
-
-	err = row.Scan(&order.ID)
-	if err != nil {
-		tx.Rollback()
-		return nil, err
-	}
-
+	log.Debug("Executing INSERT query on orderline")
 	for _, line := range lines {
-		_, err = tx.Exec(`INSERT INTO orderline (order_id, product_id, quantity, price) VALUES($1, $2, $3, $4);`,
+		_, err = r.tx.Exec(`INSERT INTO orderline (order_id, product_id, quantity, price) VALUES($1, $2, $3, $4);`,
 			order.ID, line.ProductID, line.Quantity, line.Price)
 		if err != nil {
-			tx.Rollback()
+			log.Error("Failed to create orderline", zap.Error(err))
 			return nil, err
 		}
 	}
 
-	return &order, tx.Commit()
+	log.Info("Order successfully created", zap.Int("orderID", order.ID))
+	return &order, nil
+}
+
+func (r *OrderTxRepository) Commit() error {
+	return r.tx.Commit()
+}
+
+func (r *OrderTxRepository) Rollback() error {
+	return r.tx.Rollback()
 }
 
 func (r *OrderRepository) GetOrderByID(userID, orderID int) (*model.Order, error) {

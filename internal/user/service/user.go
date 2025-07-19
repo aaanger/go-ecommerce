@@ -12,6 +12,7 @@ import (
 type IUserService interface {
 	Register(req *model.UserReq) (*model.User, error)
 	Login(req *model.UserReq) (*model.User, string, string, error)
+	GetEmail(userID int) string
 }
 
 type UserService struct {
@@ -43,4 +44,8 @@ func (s *UserService) Login(req *model.UserReq) (*model.User, string, string, er
 	refreshToken := jwt.GenerateRefreshToken(user.ID, user.Email, user.Role)
 
 	return user, accessToken, refreshToken, nil
+}
+
+func (s *UserService) GetEmail(userID int) string {
+	return s.repo.GetEmail(userID)
 }

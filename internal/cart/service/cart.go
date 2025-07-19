@@ -10,34 +10,70 @@ import (
 //go:generate mockery --name=ICartService
 
 type ICartService interface {
-	GetCartByUserID(userID int) (*model.Cart, error)
-	AddProduct(userID, productID, quantity int) (*model.Cart, error)
-	DeleteProduct(userID, productID int) (*model.Cart, error)
+	GetCartByUserID(userID int, sessionID string) (*model.Cart, error)
+	AddProduct(userID, productID, quantity int, sessionID string) (*model.Cart, error)
+	DeleteProduct(userID, productID int, sessionID string) (*model.Cart, error)
 }
 
 type CartService struct {
 	repo        repository.ICartRepository
+	redisRepo   repository.IRedisCartRepository
 	productRepo productRepository.IProductRepository
 }
 
-func NewCartService(repo repository.ICartRepository, productRepo productRepository.IProductRepository) *CartService {
+func NewCartService(repo repository.ICartRepository, redisRepo repository.IRedisCartRepository, productRepo productRepository.IProductRepository) *CartService {
 	return &CartService{
 		repo:        repo,
+		redisRepo:   redisRepo,
 		productRepo: productRepo,
 	}
 }
 
-func (s *CartService) GetCartByUserID(userID int) (*model.Cart, error) {
+func (s *CartService) GetCartByUserID(userID int, sessionID string) (*model.Cart, error) {
+	if userID == 0 {
+		cart, err := s.redisRepo.GetCart(sessionID)
+		if err != nil {
+			return nil, err
+		}
+		return cart, nil
+	}
+
 	return s.repo.GetCartByUserID(userID)
 }
 
-func (s *CartService) AddProduct(userID, productID, quantity int) (*model.Cart, error) {
+func (s *CartService) AddProduct(userID, productID, quantity int, sessionID string) (*model.Cart, error) {
+	var totalPrice float64
+
 	product, err := s.productRepo.GetProductByID(productID)
 	if err != nil {
 		return nil, err
 	}
 	if product.InStock == false {
 		return nil, errors.New("product is not in stock")
+	}
+
+	if userID == 0 {
+		cart, err := s.redisRepo.GetCart(sessionID)
+		if err != nil {
+			return nil, err
+		}
+		err = s.redisRepo.AddProduct(sessionID, productID, quantity)
+		if err != nil {
+			return nil, err
+		}
+
+		cart.Lines = append(cart.Lines, model.CartLine{
+			ProductID: productID,
+			Product:   product,
+			Quantity:  quantity,
+		})
+
+		for _, line := range cart.Lines {
+			totalPrice += line.Product.Price
+		}
+
+		cart.TotalPrice = totalPrice
+		return cart, nil
 	}
 
 	cart, err := s.repo.GetCartByUserID(userID)
@@ -63,8 +99,6 @@ func (s *CartService) AddProduct(userID, productID, quantity int) (*model.Cart, 
 		Quantity:  quantity,
 	})
 
-	var totalPrice float64
-
 	for _, line := range cart.Lines {
 		totalPrice += line.Product.Price
 	}
@@ -74,7 +108,27 @@ func (s *CartService) AddProduct(userID, productID, quantity int) (*model.Cart, 
 	return cart, nil
 }
 
-func (s *CartService) DeleteProduct(userID, productID int) (*model.Cart, error) {
+func (s *CartService) DeleteProduct(userID, productID int, sessionID string) (*model.Cart, error) {
+	if userID == 0 {
+		cart, err := s.redisRepo.GetCart(sessionID)
+		if err != nil {
+			return nil, err
+		}
+		err = s.redisRepo.DeleteProduct(sessionID, productID)
+		if err != nil {
+			return nil, err
+		}
+
+		for i, line := range cart.Lines {
+			if line.ProductID == productID {
+				cart.Lines = append(cart.Lines[:i], cart.Lines[i+1:]...)
+				break
+			}
+		}
+
+		return cart, nil
+	}
+
 	cart, err := s.repo.GetCartByUserID(userID)
 	if err != nil {
 		return nil, err

@@ -13,6 +13,7 @@ import (
 type IUserRepository interface {
 	CreateUser(email, password, role string) (*model.User, error)
 	AuthUser(email, password string) (*model.User, error)
+	GetEmail(userID int) string
 }
 
 type UserRepository struct {
@@ -61,4 +62,15 @@ func (r *UserRepository) AuthUser(email, password string) (*model.User, error) {
 	}
 
 	return &user, nil
+}
+
+func (r *UserRepository) GetEmail(userID int) string {
+	var email string
+	row := r.db.QueryRow(`SELECT id FROM users WHERE email = $1;`, userID)
+	err := row.Scan(&email)
+	if err != nil {
+		return ""
+	}
+
+	return email
 }

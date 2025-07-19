@@ -1,38 +1,60 @@
 package service
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	grpcorder "github.com/aaanger/ecommerce/internal/order/handler/grpc/product"
 	"github.com/aaanger/ecommerce/internal/order/model"
 	"github.com/aaanger/ecommerce/internal/order/repository"
 	productModel "github.com/aaanger/ecommerce/internal/product/model"
 	productRepository "github.com/aaanger/ecommerce/internal/product/repository"
-	"github.com/sirupsen/logrus"
+	"github.com/aaanger/ecommerce/pkg/kafka"
+	pb "github.com/aaanger/ecommerce/proto/gen/product"
 	_ "github.com/vektra/mockery/mockery"
+	"go.uber.org/zap"
+	"strconv"
+)
+
+const (
+	CreateOrderTopic = "order_created"
 )
 
 //go:generate mockery --name=IOrderService
 
 type IOrderService interface {
-	CreateOrder(userID int, lines *model.CreateOrderReq) (*model.Order, error)
+	CreateOrder(ctx context.Context, userID int, userEmail string, lines *model.CreateOrderReq) (*model.Order, error)
 	GetOrderByID(userID, orderID int) (*model.Order, error)
 	GetAllOrders(userID int) ([]model.Order, error)
 	UpdateOrderStatus(userID, orderID int, status string) (*model.Order, error)
 	CancelOrder(userID, orderID int) (*model.Order, error)
+	ReserveProducts(ctx context.Context, lines []model.OrderLine) error
 }
 
 type OrderService struct {
 	repo        repository.IOrderRepository
 	productRepo productRepository.IProductRepository
+	grpcClient  *grpcorder.OrderGRPCClient
+	producer    *kafka.Producer
+	log         *zap.Logger
 }
 
-func NewOrderService(repo repository.IOrderRepository, productRepo productRepository.IProductRepository) *OrderService {
+func NewOrderService(repo repository.IOrderRepository, productRepo productRepository.IProductRepository, producer *kafka.Producer, log *zap.Logger) *OrderService {
 	return &OrderService{
 		repo:        repo,
 		productRepo: productRepo,
+		producer:    producer,
+		log:         log,
 	}
 }
 
-func (s *OrderService) CreateOrder(userID int, req *model.CreateOrderReq) (*model.Order, error) {
+func (s *OrderService) CreateOrder(ctx context.Context, userID int, userEmail string, req *model.CreateOrderReq) (*model.Order, error) {
+	log := s.log.With(
+		zap.String("service", "order"),
+		zap.String("layer", "service"),
+		zap.String("method", "CreateOrder"),
+		zap.Int("userID", userID))
+
 	var lines []model.OrderLine
 
 	for _, line := range req.Lines {
@@ -42,26 +64,56 @@ func (s *OrderService) CreateOrder(userID int, req *model.CreateOrderReq) (*mode
 		})
 	}
 
-	logrus.Info(lines)
-
 	productMap := make(map[int]*productModel.Product)
 	for i := range lines {
+		log.Debug("Fetching product data", zap.Int("productID", lines[i].ProductID))
 		product, err := s.productRepo.GetProductByID(lines[i].ProductID)
 		if err != nil {
+			log.Error("Error fetching product data", zap.Error(err), zap.Int("productID", lines[i].ProductID))
 			return nil, err
 		}
 		productMap[product.ID] = product
 		lines[i].Price = product.Price * float64(lines[i].Quantity)
 	}
 
-	order, err := s.repo.CreateOrder(userID, lines)
+	if err := s.ReserveProducts(ctx, req.Lines); err != nil {
+		return nil, err
+	}
+
+	log.Debug("Starting DB transaction")
+	tx, err := s.repo.BeginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	for i := range order.Lines {
-		lines[i].Product = productMap[lines[i].ProductID]
+	log.Debug("Starting creating order")
+	order, err := tx.CreateOrder(userID, userEmail, lines)
+	if err != nil {
+		tx.Rollback()
+		log.Error("Error creating order", zap.Error(err))
+		return nil, err
 	}
+
+	for i := range order.Lines {
+		order.Lines[i].Product = productMap[lines[i].ProductID]
+	}
+
+	log.Debug("Sending order to Kafka, topic `order_created`", zap.Int("orderID", order.ID))
+	err = s.producer.Produce(ctx, CreateOrderTopic, strconv.Itoa(order.ID), order, 3)
+	if err != nil {
+		tx.Rollback()
+		log.Error("Kafka produce error, topic `order_created`", zap.Int("orderID", order.ID))
+		return nil, err
+	}
+	log.Info("Kafka message produced in topic `order_created`", zap.Any("order", order))
+
+	if err = tx.Commit(); err != nil {
+		tx.Rollback()
+		log.Error("Failed to commit transaction", zap.Error(err))
+		return nil, err
+	}
+
+	log.Info("Order successfully created", zap.Int("orderID", order.ID), zap.Any("order", order))
 
 	return order, nil
 }
@@ -125,4 +177,27 @@ func (s *OrderService) CancelOrder(userID, orderID int) (*model.Order, error) {
 	order.Status = model.StatusOrderCanceled
 
 	return order, nil
+}
+
+func (s *OrderService) ReserveProducts(ctx context.Context, lines []model.OrderLineReq) error {
+	var products []*pb.ReservedProduct
+
+	for _, line := range lines {
+		products = append(products, &pb.ReservedProduct{
+			ProductID: int32(line.ProductID),
+			Quantity:  int32(line.Quantity),
+		})
+	}
+
+	res, err := s.grpcClient.Client.ReserveProducts(ctx, &pb.ReserveProductsReq{
+		Products: products,
+	})
+	if err != nil {
+		return err
+	}
+	if !res.Success {
+		return fmt.Errorf("reservation failed")
+	}
+
+	return nil
 }

@@ -4,13 +4,19 @@ import (
 	"context"
 	cartHandler "github.com/aaanger/ecommerce/internal/cart/handler"
 	orderHandler "github.com/aaanger/ecommerce/internal/order/handler"
+	"github.com/aaanger/ecommerce/internal/order/service"
 	productHandler "github.com/aaanger/ecommerce/internal/product/handler"
+	"github.com/aaanger/ecommerce/internal/server/grpc"
 	userHandler "github.com/aaanger/ecommerce/internal/user/handler"
 	"github.com/aaanger/ecommerce/pkg/db"
+	"github.com/aaanger/ecommerce/pkg/email"
+	"github.com/aaanger/ecommerce/pkg/kafka"
+	"github.com/aaanger/ecommerce/pkg/redis"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 	"net/http"
 	"os"
 	"os/signal"
@@ -35,7 +41,12 @@ func (srv *Server) Shutdown(ctx context.Context) error {
 }
 
 func main() {
-	logrus.SetFormatter(new(logrus.JSONFormatter))
+	logCfg := zap.NewProductionConfig()
+	logCfg.OutputPaths = []string{"stdout", "var/log/ecom.log"}
+	logCfg.ErrorOutputPaths = []string{"stderr"}
+
+	logger, _ := logCfg.Build()
+	defer logger.Sync()
 
 	err := initConfig()
 	if err != nil {
@@ -56,15 +67,49 @@ func main() {
 		os.Getenv("PSQL_SSLMODE"),
 	})
 	if err != nil {
-		logrus.Fatalf("Error loading database: %s", err)
+		logrus.Fatalf("Error loading PostgreSQL database: %s", err)
 	}
+
+	redisClient, err := redis.NewRedisClient(redis.RedisConfig{
+		Addr:     os.Getenv("REDIS_ADDR"),
+		Password: os.Getenv("REDIS_PASSWORD"),
+		DB:       0,
+	})
+	if err != nil {
+		logrus.Fatalf("Error loading Redis database: %s", err)
+	}
+
+	writer, reader := kafka.NewKafkaConnection(kafka.KafkaConfig{
+		Brokers: []string{"localhost:9092"},
+		Topic:   service.CreateOrderTopic,
+		GroupID: "1",
+	})
+
+	producer := kafka.NewProducer(writer, logger)
+	consumer := kafka.NewConsumer(reader, logger)
+
+	logger.Debug("Kafka producer and consumer loaded successfully")
+
+	emailService, err := email.NewEmailService(email.SMTPConfig{
+		Host:     os.Getenv("SMTP_HOST"),
+		Port:     os.Getenv("SMTP_PORT"),
+		Username: os.Getenv("SMTP_USERNAME"),
+		Password: os.Getenv("SMTP_PASSWORD"),
+	})
+	if err != nil {
+		logrus.Fatalf("Error initializing email service: %s", err)
+	}
+	orderConsumer := service.NewOrderConsumer(emailService, logger)
 
 	router := gin.Default()
 
 	userHandler.UserRoutes(router, db)
 	productHandler.ProductRoutes(router, db)
-	cartHandler.CartRoutes(router, db)
-	orderHandler.OrderRoutes(router, db)
+	cartHandler.CartRoutes(router, db, redisClient)
+	orderHandler.OrderRoutes(router, db, producer, orderConsumer, logger)
+
+	productGrpcServer := grpc.NewServer(logger, db, 9090)
+	productGrpcServer.MustRun()
 
 	srv := new(Server)
 
@@ -74,6 +119,8 @@ func main() {
 			logrus.Fatalf("Error running the server: %s", err)
 		}
 	}()
+
+	go consumer.Consume(context.Background(), orderConsumer.HandleOrderCreated, 5)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)

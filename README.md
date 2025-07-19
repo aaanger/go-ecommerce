@@ -10,3 +10,16 @@
 - ```make build``` сборка приложения
 - ```make migrate``` миграции БД, если приложение запускается впервые
 - ```make run``` запуск приложения
+
+  ecommerce-app:
+  build: ./
+  ports:
+  - "3000:3000"
+  depends_on:
+  - db
+  environment:
+  PSQL_HOST: db
+  PSQL_USER: ${PSQL_USER}
+  PSQL_PASSWORD: ${PSQL_PASSWORD}
+  PSQL_DBNAME: ${PSQL_DBNAME}
+  REDIS_ADDR: redis:6379

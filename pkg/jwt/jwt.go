@@ -60,7 +60,7 @@ func GenerateRefreshToken(userID int, email, role string) string {
 	return signedToken
 }
 
-func ParseToken(accessToken string) (int, string, error) {
+func ParseToken(accessToken string) (int, string, string, error) {
 	token, err := jwt.ParseWithClaims(accessToken, &tokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("invalid signing token method")
@@ -69,17 +69,17 @@ func ParseToken(accessToken string) (int, string, error) {
 		return []byte(signingKey), nil
 	})
 	if err != nil {
-		return 0, "", err
+		return 0, "", "", err
 	}
 
 	if !token.Valid {
-		return 0, "", errors.New("invalid token")
+		return 0, "", "", errors.New("invalid token")
 	}
 
 	claims, ok := token.Claims.(*tokenClaims)
 	if !ok {
-		return 0, "", err
+		return 0, "", "", err
 	}
 
-	return claims.UserID, claims.Role, nil
+	return claims.UserID, claims.Email, claims.Role, nil
 }

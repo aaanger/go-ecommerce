@@ -6,43 +6,67 @@ import (
 	"github.com/aaanger/ecommerce/pkg/middleware"
 	"github.com/aaanger/ecommerce/pkg/response"
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 	"net/http"
 	"strconv"
 )
 
 type OrderHandler struct {
-	service service.IOrderService
+	service  service.IOrderService
+	consumer *service.OrderConsumer
+	log      *zap.Logger
 }
 
-func NewOrderHandler(service service.IOrderService) *OrderHandler {
+func NewOrderHandler(service service.IOrderService, consumer *service.OrderConsumer, log *zap.Logger) *OrderHandler {
 	return &OrderHandler{
-		service: service,
+		service:  service,
+		consumer: consumer,
+		log:      log,
 	}
 }
 
 func (h *OrderHandler) CreateOrder(c *gin.Context) {
+	log := h.log.With(
+		zap.String("service", "order"),
+		zap.String("layer", "handler"),
+		zap.String("method", "CreateOrder"))
+
 	var req model.CreateOrderReq
 
 	err := c.BindJSON(&req)
 	if err != nil {
+		log.Error("Create order: failed to parse request",
+			zap.Error(err),
+			zap.Any("request body", c.Request.Body))
 		response.Error(c, http.StatusBadRequest, "Failed to parse request body")
 		return
 	}
 
 	userID, err := middleware.GetUserID(c)
 	if err != nil {
+		log.Warn("Create order: user ID not found",
+			zap.Error(err))
 		response.Error(c, http.StatusUnauthorized, "user id not found")
 		return
 	}
 
-	order, err := h.service.CreateOrder(userID, &req)
+	email, err := middleware.GetUserEmail(c)
 	if err != nil {
-		logrus.Error(err)
+		log.Warn("Create order: user email not found", zap.Error(err))
+		response.Error(c, http.StatusUnauthorized, "user email not found")
+		return
+	}
+
+	log.Info("Creating order", zap.Int("userID", userID), zap.Any("request data", req))
+
+	order, err := h.service.CreateOrder(c, userID, email, &req)
+	if err != nil {
+		log.Error("Failed to create order", zap.Error(err), zap.Any("request data", req))
 		response.Error(c, http.StatusInternalServerError, "Failed to create order")
 		return
 	}
 
+	log.Info("Order created successfully", zap.Any("order", order))
 	response.JSON(c, http.StatusOK, order)
 }
 

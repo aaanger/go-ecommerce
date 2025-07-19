@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/aaanger/ecommerce/internal/cart/model"
 	"github.com/aaanger/ecommerce/internal/cart/service"
+	"github.com/aaanger/ecommerce/pkg/cookie"
 	"github.com/aaanger/ecommerce/pkg/middleware"
 	"github.com/aaanger/ecommerce/pkg/response"
 	"github.com/gin-gonic/gin"
@@ -21,12 +22,13 @@ func NewCartHandler(service service.ICartService) *CartHandler {
 
 func (h *CartHandler) GetCart(c *gin.Context) {
 	userID, err := middleware.GetUserID(c)
+	session, err := cookie.ReadCookie(c.Request, cookie.CookieSession)
 	if err != nil {
-		response.Error(c, http.StatusUnauthorized, "user id not found")
+		response.Error(c, http.StatusBadGateway, "Try to visit page later")
 		return
 	}
 
-	cart, err := h.service.GetCartByUserID(userID)
+	cart, err := h.service.GetCartByUserID(userID, session)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "get cart error")
 		return
@@ -37,8 +39,9 @@ func (h *CartHandler) GetCart(c *gin.Context) {
 
 func (h *CartHandler) AddProduct(c *gin.Context) {
 	userID, err := middleware.GetUserID(c)
+	session, err := cookie.ReadCookie(c.Request, cookie.CookieSession)
 	if err != nil {
-		response.Error(c, http.StatusUnauthorized, "user id not found")
+		response.Error(c, http.StatusBadGateway, "Try to visit page later")
 		return
 	}
 
@@ -50,7 +53,7 @@ func (h *CartHandler) AddProduct(c *gin.Context) {
 		return
 	}
 
-	cart, err := h.service.AddProduct(userID, input.ProductID, input.Quantity)
+	cart, err := h.service.AddProduct(userID, input.ProductID, input.Quantity, session)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "Add product to cart error")
 		return
@@ -61,8 +64,9 @@ func (h *CartHandler) AddProduct(c *gin.Context) {
 
 func (h *CartHandler) DeleteProduct(c *gin.Context) {
 	userID, err := middleware.GetUserID(c)
+	session, err := cookie.ReadCookie(c.Request, cookie.CookieSession)
 	if err != nil {
-		response.Error(c, http.StatusUnauthorized, "user id not found")
+		response.Error(c, http.StatusBadGateway, "Try to visit page later")
 		return
 	}
 
@@ -74,7 +78,7 @@ func (h *CartHandler) DeleteProduct(c *gin.Context) {
 		return
 	}
 
-	cart, err := h.service.DeleteProduct(userID, input.ProductID)
+	cart, err := h.service.DeleteProduct(userID, input.ProductID, session)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "Failed to delete product from the cart")
 		return
