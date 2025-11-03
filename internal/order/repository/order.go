@@ -15,7 +15,7 @@ type IOrderRepository interface {
 	GetAllOrders(userID int) ([]model.Order, error)
 	UpdateOrder(userID, orderID int, status string) error
 
-	BeginTx(ctx context.Context) (*OrderTxRepository, error)
+	BeginTx(ctx context.Context, log *zap.Logger) (*OrderTxRepository, error)
 }
 
 type IOrderTxRepository interface {
@@ -40,13 +40,16 @@ func NewOrderRepository(db *sql.DB) *OrderRepository {
 	}
 }
 
-func (r *OrderRepository) BeginTx(ctx context.Context) (*OrderTxRepository, error) {
+func (r *OrderRepository) BeginTx(ctx context.Context, log *zap.Logger) (*OrderTxRepository, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return &OrderTxRepository{tx: tx}, nil
+	return &OrderTxRepository{
+		tx:  tx,
+		log: log,
+	}, nil
 }
 
 func (r *OrderTxRepository) CreateOrder(userID int, userEmail string, lines []model.OrderLine) (*model.Order, error) {

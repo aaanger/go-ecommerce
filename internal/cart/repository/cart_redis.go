@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/aaanger/ecommerce/internal/cart/model"
 	"github.com/go-redis/redis"
+	"go.uber.org/zap"
 	"time"
 )
 
@@ -21,12 +22,14 @@ type IRedisCartRepository interface {
 type RedisCartRepository struct {
 	db  *redis.Client
 	ttl time.Duration
+	log *zap.Logger
 }
 
-func NewRedisCartRepository(client *redis.Client, ttl time.Duration) *RedisCartRepository {
+func NewRedisCartRepository(client *redis.Client, ttl time.Duration, log *zap.Logger) *RedisCartRepository {
 	return &RedisCartRepository{
 		db:  client,
 		ttl: ttl,
+		log: log,
 	}
 }
 
@@ -49,6 +52,10 @@ func (r *RedisCartRepository) GetCart(sessionID string) (*model.Cart, error) {
 }
 
 func (r *RedisCartRepository) AddProduct(sessionID string, productID, quantity int) error {
+	log := r.log.With(
+		zap.String("storage", "redis"),
+		zap.String("method", "AddProduct"))
+
 	var cart model.Cart
 
 	data, err := r.db.Get("cart:" + sessionID).Result()
@@ -57,12 +64,20 @@ func (r *RedisCartRepository) AddProduct(sessionID string, productID, quantity i
 			Lines: []model.CartLine{},
 		}
 	} else if err != nil {
+		log.Error("failed to get cart", zap.Error(err))
 		return err
 	}
 
-	err = json.Unmarshal([]byte(data), &cart)
-	if err != nil {
-		return err
+	if data == "" {
+		cart = model.Cart{
+			Lines: []model.CartLine{},
+		}
+	} else {
+		err = json.Unmarshal([]byte(data), &cart)
+		if err != nil {
+			log.Error("json unmarshal error", zap.Error(err), zap.String("data", data))
+			return err
+		}
 	}
 
 	cart.Lines = append(cart.Lines, model.CartLine{
@@ -72,6 +87,7 @@ func (r *RedisCartRepository) AddProduct(sessionID string, productID, quantity i
 
 	encodedCart, err := json.Marshal(cart)
 	if err != nil {
+		log.Error("json marshal error", zap.Error(err))
 		return err
 	}
 

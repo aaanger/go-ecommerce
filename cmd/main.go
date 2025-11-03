@@ -4,6 +4,7 @@ import (
 	"context"
 	cartHandler "github.com/aaanger/ecommerce/internal/cart/handler"
 	orderHandler "github.com/aaanger/ecommerce/internal/order/handler"
+	grpcorder "github.com/aaanger/ecommerce/internal/order/handler/grpc/product"
 	"github.com/aaanger/ecommerce/internal/order/service"
 	productHandler "github.com/aaanger/ecommerce/internal/product/handler"
 	"github.com/aaanger/ecommerce/internal/server/grpc"
@@ -17,10 +18,12 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 type Server struct {
@@ -45,16 +48,17 @@ func main() {
 	logCfg.OutputPaths = []string{"stdout", "var/log/ecom.log"}
 	logCfg.ErrorOutputPaths = []string{"stderr"}
 
-	logger, _ := logCfg.Build()
+	logger, err := logCfg.Build()
+	if err != nil {
+		log.Fatalf("")
+	}
 	defer logger.Sync()
 
-	err := initConfig()
-	if err != nil {
+	if err := initConfig(); err != nil {
 		logrus.Fatalf("Error initializing config: %s", err)
 	}
 
-	err = godotenv.Load()
-	if err != nil {
+	if err = godotenv.Load(); err != nil {
 		logrus.Fatalf("Error loading .env file: %s", err)
 	}
 
@@ -101,15 +105,22 @@ func main() {
 	}
 	orderConsumer := service.NewOrderConsumer(emailService, logger)
 
+	go func() {
+		productGrpcServer := grpc.NewServer(logger, db, 9090)
+		productGrpcServer.MustRun()
+	}()
+
+	grpcClient, err := grpcorder.NewClient(context.Background(), logger, "localhost:9090", 3, 5*time.Second)
+	if err != nil {
+		logger.Error("error starting grpc client", zap.Error(err))
+	}
+
 	router := gin.Default()
 
 	userHandler.UserRoutes(router, db)
 	productHandler.ProductRoutes(router, db)
-	cartHandler.CartRoutes(router, db, redisClient)
-	orderHandler.OrderRoutes(router, db, producer, orderConsumer, logger)
-
-	productGrpcServer := grpc.NewServer(logger, db, 9090)
-	productGrpcServer.MustRun()
+	cartHandler.CartRoutes(router, db, logger, redisClient)
+	orderHandler.OrderRoutes(router, db, producer, grpcClient, orderConsumer, logger)
 
 	srv := new(Server)
 

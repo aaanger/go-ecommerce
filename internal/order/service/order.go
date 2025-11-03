@@ -28,7 +28,7 @@ type IOrderService interface {
 	GetAllOrders(userID int) ([]model.Order, error)
 	UpdateOrderStatus(userID, orderID int, status string) (*model.Order, error)
 	CancelOrder(userID, orderID int) (*model.Order, error)
-	ReserveProducts(ctx context.Context, lines []model.OrderLine) error
+	ReserveProducts(ctx context.Context, lines []model.OrderLineReq) error
 }
 
 type OrderService struct {
@@ -39,10 +39,11 @@ type OrderService struct {
 	log         *zap.Logger
 }
 
-func NewOrderService(repo repository.IOrderRepository, productRepo productRepository.IProductRepository, producer *kafka.Producer, log *zap.Logger) *OrderService {
+func NewOrderService(repo repository.IOrderRepository, productRepo productRepository.IProductRepository, grpcClient *grpcorder.OrderGRPCClient, producer *kafka.Producer, log *zap.Logger) *OrderService {
 	return &OrderService{
 		repo:        repo,
 		productRepo: productRepo,
+		grpcClient:  grpcClient,
 		producer:    producer,
 		log:         log,
 	}
@@ -81,7 +82,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, userEmail st
 	}
 
 	log.Debug("Starting DB transaction")
-	tx, err := s.repo.BeginTx(ctx)
+	tx, err := s.repo.BeginTx(ctx, s.log)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +100,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, userEmail st
 	}
 
 	log.Debug("Sending order to Kafka, topic `order_created`", zap.Int("orderID", order.ID))
-	err = s.producer.Produce(ctx, CreateOrderTopic, strconv.Itoa(order.ID), order, 3)
+	err = s.producer.Produce(ctx, strconv.Itoa(order.ID), order, 3)
 	if err != nil {
 		tx.Rollback()
 		log.Error("Kafka produce error, topic `order_created`", zap.Int("orderID", order.ID))

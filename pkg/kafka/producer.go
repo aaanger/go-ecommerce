@@ -20,8 +20,8 @@ func NewProducer(writer *kafka.Writer, log *zap.Logger) *Producer {
 	}
 }
 
-func (p *Producer) Produce(ctx context.Context, topic, key string, value interface{}, retries int) error {
-	p.log.Info("Producing kafka message", zap.String("topic", topic))
+func (p *Producer) Produce(ctx context.Context, key string, value interface{}, retries int) error {
+	p.log.Info("Producing kafka message", zap.String("topic", p.writer.Topic))
 
 	data, err := json.Marshal(value)
 	if err != nil {
@@ -30,7 +30,6 @@ func (p *Producer) Produce(ctx context.Context, topic, key string, value interfa
 
 	for i := 0; i < retries; i++ {
 		err = p.writer.WriteMessages(ctx, kafka.Message{
-			Topic: topic,
 			Key:   []byte(key),
 			Value: data,
 		})
@@ -39,7 +38,7 @@ func (p *Producer) Produce(ctx context.Context, topic, key string, value interfa
 		}
 	}
 
-	p.log.Error("Error producing kafka message", zap.String("topic", topic), zap.Error(err), zap.Any("value", value))
+	p.log.Error("Error producing kafka message", zap.String("topic", p.writer.Topic), zap.Error(err), zap.Any("value", value))
 	return fmt.Errorf("error producing kafka message after %d retries: %w", retries, err)
 }
 

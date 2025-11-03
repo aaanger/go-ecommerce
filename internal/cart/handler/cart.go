@@ -7,16 +7,19 @@ import (
 	"github.com/aaanger/ecommerce/pkg/middleware"
 	"github.com/aaanger/ecommerce/pkg/response"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"net/http"
 )
 
 type CartHandler struct {
 	service service.ICartService
+	log     *zap.Logger
 }
 
-func NewCartHandler(service service.ICartService) *CartHandler {
+func NewCartHandler(service service.ICartService, log *zap.Logger) *CartHandler {
 	return &CartHandler{
 		service: service,
+		log:     log,
 	}
 }
 
@@ -38,9 +41,16 @@ func (h *CartHandler) GetCart(c *gin.Context) {
 }
 
 func (h *CartHandler) AddProduct(c *gin.Context) {
+	log := h.log.With(
+		zap.String("service", "cart"),
+		zap.String("layer", "handler"),
+		zap.String("method", "AddProduct"))
+
 	userID, err := middleware.GetUserID(c)
 	session, err := cookie.ReadCookie(c.Request, cookie.CookieSession)
 	if err != nil {
+		log.Error("failed to read cookie",
+			zap.Error(err))
 		response.Error(c, http.StatusBadGateway, "Try to visit page later")
 		return
 	}
@@ -55,6 +65,8 @@ func (h *CartHandler) AddProduct(c *gin.Context) {
 
 	cart, err := h.service.AddProduct(userID, input.ProductID, input.Quantity, session)
 	if err != nil {
+		log.Error("500 error",
+			zap.Error(err))
 		response.Error(c, http.StatusInternalServerError, "Add product to cart error")
 		return
 	}

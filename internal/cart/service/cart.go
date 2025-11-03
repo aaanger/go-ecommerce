@@ -5,6 +5,7 @@ import (
 	"github.com/aaanger/ecommerce/internal/cart/model"
 	"github.com/aaanger/ecommerce/internal/cart/repository"
 	productRepository "github.com/aaanger/ecommerce/internal/product/repository"
+	"go.uber.org/zap"
 )
 
 //go:generate mockery --name=ICartService
@@ -19,13 +20,15 @@ type CartService struct {
 	repo        repository.ICartRepository
 	redisRepo   repository.IRedisCartRepository
 	productRepo productRepository.IProductRepository
+	log         *zap.Logger
 }
 
-func NewCartService(repo repository.ICartRepository, redisRepo repository.IRedisCartRepository, productRepo productRepository.IProductRepository) *CartService {
+func NewCartService(repo repository.ICartRepository, redisRepo repository.IRedisCartRepository, productRepo productRepository.IProductRepository, log *zap.Logger) *CartService {
 	return &CartService{
 		repo:        repo,
 		redisRepo:   redisRepo,
 		productRepo: productRepo,
+		log:         log,
 	}
 }
 
@@ -42,10 +45,17 @@ func (s *CartService) GetCartByUserID(userID int, sessionID string) (*model.Cart
 }
 
 func (s *CartService) AddProduct(userID, productID, quantity int, sessionID string) (*model.Cart, error) {
+	log := s.log.With(
+		zap.String("service", "cart"),
+		zap.String("layer", "service"),
+		zap.String("method", "AddProduct"),
+		zap.Int("userID", userID))
+
 	var totalPrice float64
 
 	product, err := s.productRepo.GetProductByID(productID)
 	if err != nil {
+		log.Error("Get product error", zap.Error(err))
 		return nil, err
 	}
 	if product.InStock == false {
@@ -55,10 +65,12 @@ func (s *CartService) AddProduct(userID, productID, quantity int, sessionID stri
 	if userID == 0 {
 		cart, err := s.redisRepo.GetCart(sessionID)
 		if err != nil {
+			log.Error("Redis get cart error", zap.Error(err))
 			return nil, err
 		}
 		err = s.redisRepo.AddProduct(sessionID, productID, quantity)
 		if err != nil {
+			log.Error("Redis add product error", zap.Error(err))
 			return nil, err
 		}
 
@@ -112,6 +124,7 @@ func (s *CartService) DeleteProduct(userID, productID int, sessionID string) (*m
 	if userID == 0 {
 		cart, err := s.redisRepo.GetCart(sessionID)
 		if err != nil {
+
 			return nil, err
 		}
 		err = s.redisRepo.DeleteProduct(sessionID, productID)
