@@ -1,6 +1,7 @@
 package model
 
 import (
+	payment "github.com/aaanger/ecommerce/internal/payment/model"
 	"github.com/aaanger/ecommerce/internal/product/model"
 	"time"
 )
@@ -38,6 +39,11 @@ type OrderLineReq struct {
 
 type CreateOrderReq struct {
 	Lines []OrderLineReq `json:"lines" binding:"required,dive,required"`
+}
+
+type CreateOrderRes struct {
+	Order   *Order
+	Payment *payment.CreatePaymentRes
 }
 
 type UpdateOrderStatusReq struct {

@@ -5,6 +5,7 @@ import (
 	grpcorder "github.com/aaanger/ecommerce/internal/order/handler/grpc/product"
 	"github.com/aaanger/ecommerce/internal/order/repository"
 	"github.com/aaanger/ecommerce/internal/order/service"
+	payment "github.com/aaanger/ecommerce/internal/payment/client"
 	repository2 "github.com/aaanger/ecommerce/internal/product/repository"
 	"github.com/aaanger/ecommerce/pkg/kafka"
 	"github.com/aaanger/ecommerce/pkg/middleware"
@@ -12,10 +13,10 @@ import (
 	"go.uber.org/zap"
 )
 
-func OrderRoutes(r *gin.Engine, db *sql.DB, producer *kafka.Producer, grpcClient *grpcorder.OrderGRPCClient, consumer *service.OrderConsumer, logger *zap.Logger) {
+func OrderRoutes(r *gin.Engine, db *sql.DB, producer *kafka.Producer, grpcClient *grpcorder.OrderGRPCClient, paymentClient *payment.Client, consumer *service.OrderConsumer, logger *zap.Logger) {
 	repo := repository.NewOrderRepository(db)
 	productRepo := repository2.NewProductRepository(db)
-	svc := service.NewOrderService(repo, productRepo, grpcClient, producer, logger)
+	svc := service.NewOrderService(repo, productRepo, grpcClient, paymentClient, producer, logger)
 	h := NewOrderHandler(svc, consumer, logger)
 
 	order := r.Group("/orders", middleware.UserIdentity)

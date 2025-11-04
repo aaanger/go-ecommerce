@@ -6,6 +6,7 @@ import (
 	orderHandler "github.com/aaanger/ecommerce/internal/order/handler"
 	grpcorder "github.com/aaanger/ecommerce/internal/order/handler/grpc/product"
 	"github.com/aaanger/ecommerce/internal/order/service"
+	payment "github.com/aaanger/ecommerce/internal/payment/client"
 	productHandler "github.com/aaanger/ecommerce/internal/product/handler"
 	"github.com/aaanger/ecommerce/internal/server/grpc"
 	userHandler "github.com/aaanger/ecommerce/internal/user/handler"
@@ -115,12 +116,14 @@ func main() {
 		logger.Error("error starting grpc client", zap.Error(err))
 	}
 
+	paymentClient := payment.NewClient(os.Getenv("SHOP_ID"), os.Getenv("SHOP_SECRET_KEY"))
+
 	router := gin.Default()
 
 	userHandler.UserRoutes(router, db)
 	productHandler.ProductRoutes(router, db)
 	cartHandler.CartRoutes(router, db, logger, redisClient)
-	orderHandler.OrderRoutes(router, db, producer, grpcClient, orderConsumer, logger)
+	orderHandler.OrderRoutes(router, db, producer, grpcClient, paymentClient, orderConsumer, logger)
 
 	srv := new(Server)
 

@@ -7,6 +7,8 @@ import (
 	grpcorder "github.com/aaanger/ecommerce/internal/order/handler/grpc/product"
 	"github.com/aaanger/ecommerce/internal/order/model"
 	"github.com/aaanger/ecommerce/internal/order/repository"
+	payment "github.com/aaanger/ecommerce/internal/payment/client"
+	paymentModel "github.com/aaanger/ecommerce/internal/payment/model"
 	productModel "github.com/aaanger/ecommerce/internal/product/model"
 	productRepository "github.com/aaanger/ecommerce/internal/product/repository"
 	"github.com/aaanger/ecommerce/pkg/kafka"
@@ -23,7 +25,7 @@ const (
 //go:generate mockery --name=IOrderService
 
 type IOrderService interface {
-	CreateOrder(ctx context.Context, userID int, userEmail string, lines *model.CreateOrderReq) (*model.Order, error)
+	CreateOrder(ctx context.Context, userID int, userEmail string, lines *model.CreateOrderReq) (*model.CreateOrderRes, error)
 	GetOrderByID(userID, orderID int) (*model.Order, error)
 	GetAllOrders(userID int) ([]model.Order, error)
 	UpdateOrderStatus(userID, orderID int, status string) (*model.Order, error)
@@ -32,24 +34,26 @@ type IOrderService interface {
 }
 
 type OrderService struct {
-	repo        repository.IOrderRepository
-	productRepo productRepository.IProductRepository
-	grpcClient  *grpcorder.OrderGRPCClient
-	producer    *kafka.Producer
-	log         *zap.Logger
+	repo          repository.IOrderRepository
+	productRepo   productRepository.IProductRepository
+	grpcClient    *grpcorder.OrderGRPCClient
+	paymentClient *payment.Client
+	producer      *kafka.Producer
+	log           *zap.Logger
 }
 
-func NewOrderService(repo repository.IOrderRepository, productRepo productRepository.IProductRepository, grpcClient *grpcorder.OrderGRPCClient, producer *kafka.Producer, log *zap.Logger) *OrderService {
+func NewOrderService(repo repository.IOrderRepository, productRepo productRepository.IProductRepository, grpcClient *grpcorder.OrderGRPCClient, paymentClient *payment.Client, producer *kafka.Producer, log *zap.Logger) *OrderService {
 	return &OrderService{
-		repo:        repo,
-		productRepo: productRepo,
-		grpcClient:  grpcClient,
-		producer:    producer,
-		log:         log,
+		repo:          repo,
+		productRepo:   productRepo,
+		grpcClient:    grpcClient,
+		paymentClient: paymentClient,
+		producer:      producer,
+		log:           log,
 	}
 }
 
-func (s *OrderService) CreateOrder(ctx context.Context, userID int, userEmail string, req *model.CreateOrderReq) (*model.Order, error) {
+func (s *OrderService) CreateOrder(ctx context.Context, userID int, userEmail string, req *model.CreateOrderReq) (*model.CreateOrderRes, error) {
 	log := s.log.With(
 		zap.String("service", "order"),
 		zap.String("layer", "service"),
@@ -99,6 +103,26 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, userEmail st
 		order.Lines[i].Product = productMap[lines[i].ProductID]
 	}
 
+	paymentReq := &paymentModel.CreatePaymentReq{
+		Amount: paymentModel.Amount{
+			Value:    fmt.Sprintf("%.2f", order.TotalPrice),
+			Currency: "RUB",
+		},
+		Capture: true,
+		Confirmation: paymentModel.ConfirmationReq{
+			Type:      "redirect",
+			ReturnURL: "http://localhost:3000/payment/success",
+		},
+		Description: fmt.Sprintf("Заказ №%d", order.ID),
+	}
+
+	paymentRes, err := s.paymentClient.CreatePayment(ctx, paymentReq)
+	if err != nil {
+		tx.Rollback()
+		log.Error("Failed to create payment", zap.Error(err))
+		return nil, err
+	}
+
 	log.Debug("Sending order to Kafka, topic `order_created`", zap.Int("orderID", order.ID))
 	err = s.producer.Produce(ctx, strconv.Itoa(order.ID), order, 3)
 	if err != nil {
@@ -116,7 +140,10 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, userEmail st
 
 	log.Info("Order successfully created", zap.Int("orderID", order.ID), zap.Any("order", order))
 
-	return order, nil
+	return &model.CreateOrderRes{
+		Order:   order,
+		Payment: paymentRes,
+	}, nil
 }
 
 func (s *OrderService) GetOrderByID(userID, orderID int) (*model.Order, error) {
