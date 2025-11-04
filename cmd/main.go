@@ -95,12 +95,14 @@ func main() {
 
 	logger.Debug("Kafka producer and consumer loaded successfully")
 
-	emailService, err := email.NewEmailService(email.SMTPConfig{
-		Host:     os.Getenv("SMTP_HOST"),
-		Port:     os.Getenv("SMTP_PORT"),
-		Username: os.Getenv("SMTP_USERNAME"),
-		Password: os.Getenv("SMTP_PASSWORD"),
-	})
+	emailService, err := email.NewEmailService(
+		os.Getenv("EMAIL_SENDER"),
+		email.SMTPConfig{
+			Host:     os.Getenv("SMTP_HOST"),
+			Port:     os.Getenv("SMTP_PORT"),
+			Username: os.Getenv("SMTP_USERNAME"),
+			Password: os.Getenv("SMTP_PASSWORD"),
+		})
 	if err != nil {
 		logrus.Fatalf("Error initializing email service: %s", err)
 	}

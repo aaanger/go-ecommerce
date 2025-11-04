@@ -7,10 +7,6 @@ import (
 	"strconv"
 )
 
-const (
-	DefaultSender = "partyom.anger@gmail.com"
-)
-
 type SMTPConfig struct {
 	Host     string
 	Port     string
@@ -30,14 +26,15 @@ type Email struct {
 	Plaintext string
 }
 
-func NewEmailService(cfg SMTPConfig) (*EmailService, error) {
+func NewEmailService(sender string, cfg SMTPConfig) (*EmailService, error) {
 	port, err := strconv.Atoi(cfg.Port)
 	if err != nil {
 		return nil, fmt.Errorf("new email service: %w", err)
 	}
 
 	es := EmailService{
-		dialer: mail.NewDialer(cfg.Host, port, cfg.Username, cfg.Password),
+		DefaultSender: sender,
+		dialer:        mail.NewDialer(cfg.Host, port, cfg.Username, cfg.Password),
 	}
 
 	return &es, nil
@@ -59,10 +56,9 @@ func (es *EmailService) Send(email Email) error {
 
 func (es *EmailService) CreateOrder(to string, order model.Order) error {
 	email := Email{
-		From:    DefaultSender,
-		To:      to,
-		Subject: "Ваш заказ принят в обработку",
-		//TODO: сделать имитацию вызова api службы доставки и записывать трек номер в письме
+		From:      es.DefaultSender,
+		To:        to,
+		Subject:   "Ваш заказ принят в обработку",
 		Plaintext: fmt.Sprintf("Детали заказа: %v, Итого: %f рублей", order.Lines, order.TotalPrice),
 	}
 

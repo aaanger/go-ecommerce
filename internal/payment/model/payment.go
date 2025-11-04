@@ -10,17 +10,17 @@ type CreatePaymentReq struct {
 }
 
 type CreatePaymentRes struct {
-	ID           string          `json:"id"`
-	Status       string          `json:"status"`
-	Paid         bool            `json:"paid"`
-	Amount       Amount          `json:"amount"`
-	Confirmation ConfirmationRes `json:"confirmation"`
-	CreatedAt    time.Time       `json:"created_at"`
-	Description  string          `json:"description"`
-	Metadata     string          `json:"metadata"`
-	Recipient    Recipient       `json:"recipient"`
-	Refundable   bool            `json:"refundable"`
-	Test         bool            `json:"test"`
+	ID           string            `json:"id"`
+	Status       string            `json:"status"`
+	Paid         bool              `json:"paid"`
+	Amount       Amount            `json:"amount"`
+	Confirmation ConfirmationRes   `json:"confirmation"`
+	CreatedAt    time.Time         `json:"created_at"`
+	Description  string            `json:"description"`
+	Metadata     map[string]string `json:"metadata"`
+	Recipient    Recipient         `json:"recipient"`
+	Refundable   bool              `json:"refundable"`
+	Test         bool              `json:"test"`
 }
 
 type Amount struct {
