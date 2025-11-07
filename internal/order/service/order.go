@@ -123,9 +123,12 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, userEmail st
 		return nil, err
 	}
 
-	log.Debug("Sending order to Kafka, topic `order_created`", zap.Int("orderID", order.ID))
-	err = s.producer.Produce(ctx, strconv.Itoa(order.ID), order, 3)
-	if err != nil {
+	log.Info("Producing order to Kafka",
+		zap.Int("orderID", order.ID),
+		zap.String("userEmail", order.UserEmail),
+		zap.Any("order", order),
+	)
+	if err = s.producer.Produce(ctx, strconv.Itoa(order.ID), order, 3); err != nil {
 		tx.Rollback()
 		log.Error("Kafka produce error, topic `order_created`", zap.Int("orderID", order.ID))
 		return nil, err
@@ -173,11 +176,11 @@ func (s *OrderService) UpdateOrderStatus(userID, orderID int, status string) (*m
 		return nil, err
 	}
 
-	if order.Status == model.StatusOrderDelivered || order.Status == model.StatusOrderCanceled {
+	if order.Status == model.StatusDelivered || order.Status == model.StatusCanceled {
 		return nil, errors.New("failed to update status: order delivered or canceled")
 	}
 
-	if status == model.StatusOrderDelivering || status == model.StatusOrderDelivered {
+	if status == model.StatusDelivering || status == model.StatusDelivered {
 		err = s.repo.UpdateOrder(userID, orderID, status)
 		if err != nil {
 			return nil, err
@@ -194,15 +197,15 @@ func (s *OrderService) CancelOrder(userID, orderID int) (*model.Order, error) {
 		return nil, err
 	}
 
-	if order.Status == model.StatusOrderDelivered || order.Status == model.StatusOrderCanceled {
+	if order.Status == model.StatusDelivered || order.Status == model.StatusCanceled {
 		return nil, errors.New("invalid order status")
 	}
 
-	err = s.repo.UpdateOrder(userID, orderID, model.StatusOrderCanceled)
+	err = s.repo.UpdateOrder(userID, orderID, model.StatusCanceled)
 	if err != nil {
 		return nil, err
 	}
-	order.Status = model.StatusOrderCanceled
+	order.Status = model.StatusCanceled
 
 	return order, nil
 }

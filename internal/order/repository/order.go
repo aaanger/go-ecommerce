@@ -71,7 +71,7 @@ func (r *OrderTxRepository) CreateOrder(userID int, userEmail string, lines []mo
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 		Lines:      lines,
-		Status:     model.StatusOrderCreated,
+		Status:     model.StatusPending,
 		TotalPrice: totalPrice,
 	}
 

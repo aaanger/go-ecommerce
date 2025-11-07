@@ -7,10 +7,11 @@ import (
 )
 
 const (
-	StatusOrderCreated    = "Created"
-	StatusOrderDelivering = "Delivering"
-	StatusOrderDelivered  = "Delivered"
-	StatusOrderCanceled   = "Canceled"
+	StatusPending    = "Pending"
+	StatusCreated    = "Created"
+	StatusDelivering = "Delivering"
+	StatusDelivered  = "Delivered"
+	StatusCanceled   = "Canceled"
 )
 
 type Order struct {
