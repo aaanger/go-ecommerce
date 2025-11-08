@@ -3,10 +3,11 @@ package model
 import "time"
 
 type CreatePaymentReq struct {
-	Amount       Amount          `json:"amount"`
-	Capture      bool            `json:"capture"`
-	Confirmation ConfirmationReq `json:"confirmation"`
-	Description  string          `json:"description"`
+	Amount       Amount            `json:"amount"`
+	Capture      bool              `json:"capture"`
+	Confirmation ConfirmationReq   `json:"confirmation"`
+	Metadata     map[string]string `json:"metadata"`
+	Description  string            `json:"description"`
 }
 
 type CreatePaymentRes struct {

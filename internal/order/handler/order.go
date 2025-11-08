@@ -83,9 +83,14 @@ func (h *OrderHandler) GetOrderByID(c *gin.Context) {
 		return
 	}
 
-	order, err := h.service.GetOrderByID(userID, orderID)
+	order, err := h.service.GetOrderByID(orderID)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "Order not found")
+		return
+	}
+
+	if order.UserID != userID {
+		response.Error(c, http.StatusForbidden, "not your order")
 		return
 	}
 
@@ -146,7 +151,7 @@ func (h *OrderHandler) UpdateOrderStatus(c *gin.Context) {
 		return
 	}
 
-	order, err := h.service.UpdateOrderStatus(req.UserID, orderID, req.Status)
+	order, err := h.service.UpdateOrderStatus(orderID, req.Status)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "Failed to update order status")
 		return
@@ -156,23 +161,17 @@ func (h *OrderHandler) UpdateOrderStatus(c *gin.Context) {
 }
 
 func (h *OrderHandler) CancelOrder(c *gin.Context) {
-	userID, err := middleware.GetUserID(c)
-	if err != nil {
-		response.Error(c, http.StatusUnauthorized, "user id not found")
-		return
-	}
-
 	orderID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, "invalid order id")
 		return
 	}
 
-	order, err := h.service.CancelOrder(userID, orderID)
+	err = h.service.CancelOrder(orderID)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "Failed to cancel order")
 		return
 	}
 
-	response.JSON(c, http.StatusOK, order)
+	response.JSON(c, http.StatusOK, "order canceled")
 }

@@ -26,10 +26,11 @@ const (
 
 type IOrderService interface {
 	CreateOrder(ctx context.Context, userID int, userEmail string, lines *model.CreateOrderReq) (*model.CreateOrderRes, error)
-	GetOrderByID(userID, orderID int) (*model.Order, error)
+	ConfirmOrder(ctx context.Context, orderID int) error
+	CancelOrder(orderID int) error
+	GetOrderByID(orderID int) (*model.Order, error)
 	GetAllOrders(userID int) ([]model.Order, error)
-	UpdateOrderStatus(userID, orderID int, status string) (*model.Order, error)
-	CancelOrder(userID, orderID int) (*model.Order, error)
+	UpdateOrderStatus(orderID int, status string) (*model.Order, error)
 	ReserveProducts(ctx context.Context, lines []model.OrderLineReq) error
 }
 
@@ -85,16 +86,9 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, userEmail st
 		return nil, err
 	}
 
-	log.Debug("Starting DB transaction")
-	tx, err := s.repo.BeginTx(ctx, s.log)
-	if err != nil {
-		return nil, err
-	}
-
 	log.Debug("Starting creating order")
-	order, err := tx.CreateOrder(userID, userEmail, lines)
+	order, err := s.repo.CreateOrder(userID, userEmail, lines)
 	if err != nil {
-		tx.Rollback()
 		log.Error("Error creating order", zap.Error(err))
 		return nil, err
 	}
@@ -113,14 +107,45 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, userEmail st
 			Type:      "redirect",
 			ReturnURL: "http://localhost:3000/payment/success",
 		},
+		Metadata: map[string]string{
+			"order_id": strconv.Itoa(order.ID),
+		},
 		Description: fmt.Sprintf("Заказ №%d", order.ID),
 	}
 
 	paymentRes, err := s.paymentClient.CreatePayment(ctx, paymentReq)
 	if err != nil {
-		tx.Rollback()
 		log.Error("Failed to create payment", zap.Error(err))
 		return nil, err
+	}
+
+	return &model.CreateOrderRes{
+		Order:   order,
+		Payment: paymentRes,
+	}, nil
+}
+
+func (s *OrderService) ConfirmOrder(ctx context.Context, orderID int) error {
+	log := s.log.With(
+		zap.String("service", "order"),
+		zap.String("layer", "service"),
+		zap.String("method", "ConfirmOrder"),
+		zap.Int("orderID", orderID))
+
+	order, err := s.repo.GetOrderByID(orderID)
+	if err != nil {
+		log.Error("failed to get order by id", zap.Error(err))
+		return err
+	}
+
+	if order.Status != model.StatusPending {
+		log.Error("order is already paid")
+		return fmt.Errorf("order is already paid")
+	}
+
+	if err := s.repo.UpdateOrder(orderID, model.StatusCreated); err != nil {
+		log.Error("failed to update order status", zap.Error(err))
+		return err
 	}
 
 	log.Info("Producing order to Kafka",
@@ -129,28 +154,18 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, userEmail st
 		zap.Any("order", order),
 	)
 	if err = s.producer.Produce(ctx, strconv.Itoa(order.ID), order, 3); err != nil {
-		tx.Rollback()
 		log.Error("Kafka produce error, topic `order_created`", zap.Int("orderID", order.ID))
-		return nil, err
+		return err
 	}
 	log.Info("Kafka message produced in topic `order_created`", zap.Any("order", order))
 
-	if err = tx.Commit(); err != nil {
-		tx.Rollback()
-		log.Error("Failed to commit transaction", zap.Error(err))
-		return nil, err
-	}
+	log.Info("Order successfully confirmed", zap.Int("orderID", order.ID), zap.Any("order", order))
 
-	log.Info("Order successfully created", zap.Int("orderID", order.ID), zap.Any("order", order))
-
-	return &model.CreateOrderRes{
-		Order:   order,
-		Payment: paymentRes,
-	}, nil
+	return nil
 }
 
-func (s *OrderService) GetOrderByID(userID, orderID int) (*model.Order, error) {
-	order, err := s.repo.GetOrderByID(userID, orderID)
+func (s *OrderService) GetOrderByID(orderID int) (*model.Order, error) {
+	order, err := s.repo.GetOrderByID(orderID)
 	if err != nil {
 		return nil, err
 	}
@@ -170,8 +185,8 @@ func (s *OrderService) GetAllOrders(userID int) ([]model.Order, error) {
 	return s.repo.GetAllOrders(userID)
 }
 
-func (s *OrderService) UpdateOrderStatus(userID, orderID int, status string) (*model.Order, error) {
-	order, err := s.repo.GetOrderByID(userID, orderID)
+func (s *OrderService) UpdateOrderStatus(orderID int, status string) (*model.Order, error) {
+	order, err := s.repo.GetOrderByID(orderID)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +196,7 @@ func (s *OrderService) UpdateOrderStatus(userID, orderID int, status string) (*m
 	}
 
 	if status == model.StatusDelivering || status == model.StatusDelivered {
-		err = s.repo.UpdateOrder(userID, orderID, status)
+		err = s.repo.UpdateOrder(orderID, status)
 		if err != nil {
 			return nil, err
 		}
@@ -191,23 +206,22 @@ func (s *OrderService) UpdateOrderStatus(userID, orderID int, status string) (*m
 	return nil, errors.New("invalid status")
 }
 
-func (s *OrderService) CancelOrder(userID, orderID int) (*model.Order, error) {
-	order, err := s.repo.GetOrderByID(userID, orderID)
+func (s *OrderService) CancelOrder(orderID int) error {
+	order, err := s.repo.GetOrderByID(orderID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if order.Status == model.StatusDelivered || order.Status == model.StatusCanceled {
-		return nil, errors.New("invalid order status")
+		return errors.New("invalid order status")
 	}
 
-	err = s.repo.UpdateOrder(userID, orderID, model.StatusCanceled)
+	err = s.repo.UpdateOrder(orderID, model.StatusCanceled)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	order.Status = model.StatusCanceled
 
-	return order, nil
+	return nil
 }
 
 func (s *OrderService) ReserveProducts(ctx context.Context, lines []model.OrderLineReq) error {
