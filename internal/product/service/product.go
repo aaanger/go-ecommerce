@@ -19,6 +19,7 @@ type IProductService interface {
 	UpdateProduct(id int, input model.UpdateProduct) error
 	DeleteProduct(id int) error
 	ReserveProducts(ctx context.Context, req *pb.ReserveProductsReq) (*pb.ReserveProductsRes, error)
+	UnreserveProducts(ctx context.Context, req *pb.ReserveProductsReq) (*pb.ReserveProductsRes, error)
 }
 
 type ProductService struct {
@@ -72,6 +73,26 @@ func (s *ProductService) ReserveProducts(ctx context.Context, req *pb.ReservePro
 		updatedAmount := product.Amount - int(item.Quantity)
 		inStock := updatedAmount > 0
 
+		err = s.UpdateProduct(product.ID, model.UpdateProduct{
+			Amount:  &updatedAmount,
+			InStock: &inStock,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &pb.ReserveProductsRes{Success: true}, nil
+}
+
+func (s *ProductService) UnreserveProducts(ctx context.Context, req *pb.ReserveProductsReq) (*pb.ReserveProductsRes, error) {
+	for _, item := range req.Products {
+		product, err := s.GetProductByID(int(item.ProductID))
+		if err != nil {
+			return nil, err
+		}
+
+		updatedAmount := product.Amount + int(item.Quantity)
+		inStock := updatedAmount > 0
 		err = s.UpdateProduct(product.ID, model.UpdateProduct{
 			Amount:  &updatedAmount,
 			InStock: &inStock,

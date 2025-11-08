@@ -6,6 +6,7 @@ option go_package = "./;product";
 
 service ProductService {
   rpc ReserveProducts(ReserveProductsReq) returns (ReserveProductsRes);
+  rpc UnreserveProducts(ReserveProductsReq) returns (ReserveProductsRes);
 }
 
 message ReserveProductsReq {

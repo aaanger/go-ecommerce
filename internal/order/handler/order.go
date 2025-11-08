@@ -167,7 +167,7 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 		return
 	}
 
-	err = h.service.CancelOrder(orderID)
+	err = h.service.CancelOrder(c, orderID)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "Failed to cancel order")
 		return

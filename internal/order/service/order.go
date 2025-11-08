@@ -27,7 +27,7 @@ const (
 type IOrderService interface {
 	CreateOrder(ctx context.Context, userID int, userEmail string, lines *model.CreateOrderReq) (*model.CreateOrderRes, error)
 	ConfirmOrder(ctx context.Context, orderID int) error
-	CancelOrder(orderID int) error
+	CancelOrder(ctx context.Context, orderID int) error
 	GetOrderByID(orderID int) (*model.Order, error)
 	GetAllOrders(userID int) ([]model.Order, error)
 	UpdateOrderStatus(orderID int, status string) (*model.Order, error)
@@ -206,7 +206,7 @@ func (s *OrderService) UpdateOrderStatus(orderID int, status string) (*model.Ord
 	return nil, errors.New("invalid status")
 }
 
-func (s *OrderService) CancelOrder(orderID int) error {
+func (s *OrderService) CancelOrder(ctx context.Context, orderID int) error {
 	order, err := s.repo.GetOrderByID(orderID)
 	if err != nil {
 		return err
@@ -216,6 +216,10 @@ func (s *OrderService) CancelOrder(orderID int) error {
 		return errors.New("invalid order status")
 	}
 
+	err = s.UnreserveProducts(ctx, order.Lines)
+	if err != nil {
+		return err
+	}
 	err = s.repo.UpdateOrder(orderID, model.StatusCanceled)
 	if err != nil {
 		return err
@@ -235,6 +239,29 @@ func (s *OrderService) ReserveProducts(ctx context.Context, lines []model.OrderL
 	}
 
 	res, err := s.grpcClient.Client.ReserveProducts(ctx, &pb.ReserveProductsReq{
+		Products: products,
+	})
+	if err != nil {
+		return err
+	}
+	if !res.Success {
+		return fmt.Errorf("reservation failed")
+	}
+
+	return nil
+}
+
+func (s *OrderService) UnreserveProducts(ctx context.Context, lines []model.OrderLine) error {
+	var products []*pb.ReservedProduct
+
+	for _, line := range lines {
+		products = append(products, &pb.ReservedProduct{
+			ProductID: int32(line.ProductID),
+			Quantity:  int32(line.Quantity),
+		})
+	}
+
+	res, err := s.grpcClient.Client.UnreserveProducts(ctx, &pb.ReserveProductsReq{
 		Products: products,
 	})
 	if err != nil {
