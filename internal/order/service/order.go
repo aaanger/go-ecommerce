@@ -268,7 +268,7 @@ func (s *OrderService) UnreserveProducts(ctx context.Context, lines []model.Orde
 		return err
 	}
 	if !res.Success {
-		return fmt.Errorf("reservation failed")
+		return fmt.Errorf("unreservation failed")
 	}
 
 	return nil
