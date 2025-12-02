@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package product;
+
+option go_package = "./;product";
+
+service ProductService {
+  rpc ReserveProducts(ReserveProductsReq) returns (ReserveProductsRes);
+  rpc UnreserveProducts(ReserveProductsReq) returns (ReserveProductsRes);
+}
+
+message ReserveProductsReq {
+  repeated ReservedProduct products = 1;
+}
+
+message ReserveProductsRes {
+  bool success = 1;
+}
+
+message ReservedProduct {
+  int32 productID = 1;
+  int32 quantity = 2;
+}

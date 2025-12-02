@@ -1,0 +1,4 @@
+.env
+/pkg/configs/config.yml
+.idea
+/var/log/ecom.log

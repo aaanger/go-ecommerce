@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package cart;
+
+option go_package = "./;cart";
+
+service CartService {
+  rpc ReserveProduct(ReserveProductReq) returns (ReserveProductRes);
+}
+
+message CartInfo {
+  int64 id = 1;
+  repeated CartLineInfo lines = 2;
+}
+
+message CartLineInfo {
+  int64 productID = 1;
+  int64 quantity = 2;
+}
+
+message ReserveProductReq {
+  int64 userID = 1;
+  repeated CartLineInfo lines = 2;
+}
+
+message ReserveProductRes {
+  bool success = 1;
+}
